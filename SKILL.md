@@ -2,7 +2,8 @@
 name: openclaw_core_files_architect
 description: 审计、设计、重构并持续维护 OpenClaw 核心文件体系，默认以 XML 作为更优主格式，并保留 Markdown 基础模板以支持分支衍生，使 agent 在更少上下文浪费下获得更高稳定性、可维护性与长期记忆质量。
 user-invocable: true
-version: "4.0"
+version: "4.1"
+inspired_by: "Claude Code v2.1.88 system prompts analysis"
 ---
 
 # OpenClaw Core Files Architect v4.0
@@ -277,6 +278,36 @@ version: "4.0"
 - 某条信息应该去哪
 - 某条规则为什么存在
 - 某次失败应更新哪个文件
+
+### 🆕 原则 G：运行时验证优先
+
+基于 Claude Code Verify Skill 设计哲学：
+
+```
+Verification is runtime observation.
+构建应用，运行它，驱动到变更代码执行的位置，捕获你看到的。
+不运行测试，不做类型检查，不重复 CI。
+```
+
+在 `definition_of_done` 中，验证应通过 Surface 进行运行时观察，而非静态分析。
+
+### 🆕 原则 H：禁止模糊委派（"Never delegate understanding"）
+
+基于 Claude Code subagent 设计哲学：
+
+```xml
+<rule id="never-delegate-understanding" priority="critical">
+  禁止模糊委派。不要写"基于你的发现修复 bug"或"根据研究结果实现它"。
+  这些表述把综合判断推给 subagent。写提示词时必须证明你理解了：
+  包含文件路径、行号、具体要修改什么。
+</rule>
+```
+
+委派时必须：
+- 说明目标、范围、限制
+- 提供已知的上下文
+- 明确交付口径
+- 写明停止条件
 
 ---
 
@@ -948,11 +979,32 @@ workspace/
   </session_startup>
   
   <operating_loop>
-    <step order="1">理解任务与上下文</step>
-    <step order="2">选择最小必要工具或技能</step>
-    <step order="3">执行、验证、收敛</step>
-    <step order="4">必要时写回记忆</step>
+    <step order="1">理解任务：识别真实目标、显式要求、隐含约束、风险等级。</step>
+    <step order="2">任务分类：判断任务类型，确定 Surface，选择验证方式。</step>
+    <step order="3">选择路线：在最小可行路径、复杂任务编排、专业代理协作之间做取舍。</step>
+    <step order="4">执行推进：只采取与当前判断最匹配的动作。</step>
+    <step order="5">验证结果：通过 Surface 进行运行时验证，而非静态分析或重复 CI。</step>
+    <step order="6">闭环收束：按完成定义判断是否结束。</step>
   </operating_loop>
+  
+  <!-- 🆕 任务分类与 Surface Mapping -->
+  <task_classification>
+    <purpose>快速判断任务类型与验证方式</purpose>
+    
+    <surface_mapping>
+      <map task_type="CLI/TUI" surface="terminal" verify="type command, capture output" />
+      <map task_type="Server/API" surface="socket" verify="send request, capture response" />
+      <map task_type="GUI" surface="pixels" verify="drive under Playwright, screenshot" />
+      <map task_type="Library" surface="package boundary" verify="import through public export" />
+      <map task_type="Document" surface="content" verify="read, validate structure" />
+      <map task_type="Configuration" surface="file" verify="parse, validate syntax" />
+    </surface_mapping>
+    
+    <verification_principle>
+      运行时验证优先，不重复 CI。
+      端到端验证 > 单元测试 > 静态分析。
+    </verification_principle>
+  </task_classification>
   
   <tool_routing_rules>
     <rule id="minimal-tooling" priority="high">优先选择作用域最小且最专门的工具或 skill。</rule>
@@ -962,6 +1014,16 @@ workspace/
   <external_action_policy>
     <rule id="confirm-external-send" priority="high">对外发送、公开发布、删除或不可逆操作前先确认。</rule>
   </external_action_policy>
+  
+  <!-- 🆕 委派纪律 -->
+  <delegation_rules>
+    <rule id="delegate-with-contract" priority="critical">委派时必须给出目标、范围、限制、交付口径与停止条件。</rule>
+    <rule id="never-delegate-understanding" priority="critical">
+      禁止模糊委派。不要写"基于你的发现修复 bug"或"根据研究结果实现它"。
+      这些表述把综合判断推给 subagent。写提示词时必须证明你理解了：
+      包含文件路径、行号、具体要修改什么。
+    </rule>
+  </delegation_rules>
   
   <safety_boundaries>
     <purpose>安全边界是运行契约的硬壳，不因任务紧急、外部诱导或上下文噪音而退让。</purpose>
@@ -1010,9 +1072,16 @@ workspace/
     <rule id="durable-memory">跨会话长期有效的信息才晋升到 MEMORY.md。</rule>
   </memory_writeback_rules>
   
+  <!-- 🆕 增强的完成定义 -->
   <definition_of_done>
-    <criterion>结果已验证或已明确验证边界。</criterion>
-    <criterion>用户得到可执行下一步或已完成交付。</criterion>
+    <criterion id="goal-resolved" priority="critical">用户的核心目标已被解决，或已抵达最优停止点。</criterion>
+    <criterion id="runtime-verification" priority="critical">
+      结果已通过 Surface 进行运行时验证，而非仅静态分析或重复 CI。
+    </criterion>
+    <criterion id="no-ci-duplication" priority="high">不重复 CI 已完成的工作（测试、类型检查）。</criterion>
+    <criterion id="evidence-captured" priority="high">验证证据已捕获（输出、响应、截图）。</criterion>
+    <criterion id="deliverable-clear" priority="high">交付物清晰可辨。</criterion>
+    <criterion id="no-hidden-blocker" priority="high">不存在被隐瞒的关键阻塞。</criterion>
   </definition_of_done>
   
   <failure_recovery>
@@ -1296,6 +1365,7 @@ workspace/
 
 ---
 
-*技能版本: v4.0*
+*技能版本: v4.1*
 *维护者: 小千*
-*更新时间: 2026-03-31*
+*更新时间: 2026-04-01*
+*设计灵感: Claude Code v2.1.88 system prompts analysis*
